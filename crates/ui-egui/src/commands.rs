@@ -608,7 +608,7 @@ impl PdfCraftApp {
             }
             cmd if cmd.starts_with("sign.fill.signature.select.") => {
                 if let Some(index) = cmd.rsplit('.').next().and_then(|s| s.parse::<usize>().ok()) {
-                    if let Some(saved) = self.signatures.get(index) {
+                    if let Some(saved) = self.signatures.get(index).or_else(|| if index == 0 { self.signature.as_ref() } else { None }) {
                         self.signature = Some(saved.clone());
                         self.quick_tool = crate::QuickTool::Fill(crate::fill_sign::FillTool::Signature);
                     }
@@ -616,8 +616,8 @@ impl PdfCraftApp {
             }
             cmd if cmd.starts_with("sign.fill.signature.edit.") => {
                 if let Some(index) = cmd.rsplit('.').next().and_then(|s| s.parse::<usize>().ok()) {
-                    if let Some(saved) = self.signatures.get(index) {
-                        self.signature_edit_index = Some(index);
+                    if let Some(saved) = self.signatures.get(index).or_else(|| if index == 0 { self.signature.as_ref() } else { None }) {
+                        self.signature_edit_index = self.signatures.get(index).map(|_| index);
                         self.signature_draft = crate::fill_sign::SigDraft::from_saved(false, saved);
                         self.dialog = Some(Dialog::Signature);
                     }
@@ -630,6 +630,8 @@ impl PdfCraftApp {
                         if self.signature.as_ref() == Some(&removed) {
                             self.signature = self.signatures.first().cloned();
                         }
+                    } else if index == 0 && self.signatures.is_empty() {
+                        self.signature = None;
                     }
                 }
             }
