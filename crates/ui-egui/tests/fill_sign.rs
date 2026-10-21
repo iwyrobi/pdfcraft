@@ -1547,7 +1547,7 @@ fn multiple_signatures_persist_and_legacy_settings_migrate() {
 
     // Previous versions stored a single signature using signature_text.
     let mut old = PdfCraftApp::new();
-    old.restore(&serde_json::json!({"signature_text": "Older Signature", "initials": {"Typed": "OS"}}));
+    old.restore(&serde_json::json!({"signature_text": "Older Signature", "initials": {"Typed": "OS"}}).to_string());
     assert_eq!(old.signatures, vec![SavedSig::Typed("Older Signature".into())]);
     assert_eq!(old.signature, old.signatures.first().cloned());
     assert_eq!(old.initials, Some(SavedSig::Typed("OS".into())));
