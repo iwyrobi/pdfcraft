@@ -49,6 +49,22 @@ impl SavedSig {
     }
 }
 
+/// At most five visual signatures are stored; initials remain a single separate entry.
+pub const MAX_SAVED_SIGNATURES: usize = 5;
+
+/// Append or update a saved signature without exceeding the library limit.
+pub fn save_signature(entries: &mut Vec<SavedSig>, index: Option<usize>, signature: SavedSig) -> Option<usize> {
+    if let Some(i) = index {
+        *entries.get_mut(i)? = signature;
+        Some(i)
+    } else if entries.len() < MAX_SAVED_SIGNATURES {
+        entries.push(signature);
+        Some(entries.len() - 1)
+    } else {
+        None
+    }
+}
+
 pub(crate) mod image_data {
     use base64::Engine as _;
     use pdfcraft_engine::{SignatureImage, signature_image::MAX_SIGNATURE_IMAGE_BYTES};
