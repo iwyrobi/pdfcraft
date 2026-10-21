@@ -1515,3 +1515,56 @@ fn photos_and_images_dropped_on_the_signature_pad_are_imported_not_opened() {
     assert_eq!(h.state().views.len(), tabs, "nothing opened behind the dialog");
     std::fs::remove_file(photo).unwrap();
 }
+
+#[test]
+fn signature_library_enforces_five_and_supports_editing() {
+    use pdfcraft_ui_egui::fill_sign::{MAX_SAVED_SIGNATURES, save_signature};
+    let mut entries = Vec::new();
+    assert_eq!(MAX_SAVED_SIGNATURES, 5);
+    for i in 0..MAX_SAVED_SIGNATURES {
+        assert_eq!(save_signature(&mut entries, None, SavedSig::Typed(format!("Signature {i}"))), Some(i));
+    }
+    assert_eq!(save_signature(&mut entries, None, SavedSig::Typed("Overflow".into())), None);
+    assert_eq!(entries.len(), 5);
+    assert_eq!(save_signature(&mut entries, Some(2), SavedSig::Typed("Changed".into())), Some(2));
+    assert_eq!(entries[2], SavedSig::Typed("Changed".into()));
+    assert_eq!(save_signature(&mut entries, Some(99), SavedSig::Typed("Bad index".into())), None);
+    assert_eq!(entries.len(), 5);
+}
+
+#[test]
+fn multiple_signatures_persist_and_legacy_settings_migrate() {
+    let mut app = PdfCraftApp::new();
+    app.signatures = (0..5).map(|i| SavedSig::Typed(format!("Signer {i}"))).collect();
+    app.signature = app.signatures.get(3).cloned();
+    app.initials = Some(SavedSig::Typed("IN".into()));
+    let settings = app.persist();
+    let mut restored = PdfCraftApp::new();
+    restored.restore(&settings);
+    assert_eq!(restored.signatures, app.signatures);
+    assert_eq!(restored.signature, app.signature);
+    assert_eq!(restored.initials, app.initials);
+
+    // Previous versions stored a single signature using signature_text.
+    let mut old = PdfCraftApp::new();
+    old.restore(&serde_json::json!({"signature_text": "Older Signature", "initials": {"Typed": "OS"}}));
+    assert_eq!(old.signatures, vec![SavedSig::Typed("Older Signature".into())]);
+    assert_eq!(old.signature, old.signatures.first().cloned());
+    assert_eq!(old.initials, Some(SavedSig::Typed("OS".into())));
+}
+
+#[test]
+fn multiple_signature_commands_select_and_remove_individually() {
+    let mut app = PdfCraftApp::new();
+    app.signatures = (0..5).map(|i| SavedSig::Typed(format!("Person {i}"))).collect();
+    app.signature = app.signatures.first().cloned();
+    app.initials = Some(SavedSig::Typed("AB".into()));
+    assert!(app.execute("sign.fill.signature.select.3"));
+    assert_eq!(app.signature, Some(SavedSig::Typed("Person 3".into())));
+    assert!(app.execute("sign.fill.signature.delete.3"));
+    assert_eq!(app.signatures.len(), 4);
+    assert_eq!(app.signature, Some(SavedSig::Typed("Person 0".into())));
+    assert_eq!(app.initials, Some(SavedSig::Typed("AB".into())));
+    assert!(app.execute("sign.fill.signature.add"));
+    assert_eq!(app.dialog, Some(Dialog::Signature));
+}
