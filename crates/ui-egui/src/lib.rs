@@ -2083,6 +2083,16 @@ impl PdfCraftApp {
 
     /// Run a catalogue command. Commands that aren't implemented yet say which milestone ships them.
     pub fn run_command(&mut self, command: &str) {
+        // Saved-signature card actions are dynamic and intentionally absent from
+        // the engine command registry. Dispatch them through execute directly.
+        if command == "sign.fill.signature.add"
+            || command.starts_with("sign.fill.signature.select.")
+            || command.starts_with("sign.fill.signature.edit.")
+            || command.starts_with("sign.fill.signature.delete.")
+        {
+            self.execute(command);
+            return;
+        }
         if let Some(spec) = pdfcraft_engine::commands::command(command) {
             use pdfcraft_engine::commands::Needs;
             // A tool that needs a document, chosen with none open, asks for the file and then
