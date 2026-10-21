@@ -541,46 +541,71 @@ pub(crate) fn script_preview(text: &str, w: usize, h: usize) -> egui::ColorImage
 
 /// Saved previews and add/remove controls, shared by the left panel and quick-tool picker.
 pub(crate) fn signature_entries(ui: &mut egui::Ui, app: &mut crate::PdfCraftApp, t: &Tokens) -> Option<&'static str> {
+    const USE: [&str; MAX_SAVED_SIGNATURES] = [
+        "sign.fill.signature.select.0", "sign.fill.signature.select.1",
+        "sign.fill.signature.select.2", "sign.fill.signature.select.3",
+        "sign.fill.signature.select.4",
+    ];
+    const EDIT: [&str; MAX_SAVED_SIGNATURES] = [
+        "sign.fill.signature.edit.0", "sign.fill.signature.edit.1",
+        "sign.fill.signature.edit.2", "sign.fill.signature.edit.3",
+        "sign.fill.signature.edit.4",
+    ];
+    const REMOVE: [&str; MAX_SAVED_SIGNATURES] = [
+        "sign.fill.signature.delete.0", "sign.fill.signature.delete.1",
+        "sign.fill.signature.delete.2", "sign.fill.signature.delete.3",
+        "sign.fill.signature.delete.4",
+    ];
     ui.set_width(ui.available_width().clamp(240.0, 248.0));
     let mut command = None;
-    for (i, (saved, what, use_id, change_id, remove_id)) in [
-        (app.signature.as_ref(), "signature", "sign.fill.signature", "sign.fill.signature.change", "sign.fill.signature.remove"),
-        (app.initials.as_ref(), "initials", "sign.fill.initials", "sign.fill.initials.change", "sign.fill.initials.remove"),
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        let label = |template: &str| crate::i18n::fmt(tl!(template), &[("what", tl!(what))]);
-        let Some(saved) = saved else {
-            if crate::widgets::ghost_button(ui, "plus", &label("Add {what}")).clicked() {
-                command = Some(use_id);
-            }
-            continue;
-        };
+    ui.label(format!("Saved signatures: {} / {}", app.signatures.len(), MAX_SAVED_SIGNATURES));
+    for (i, saved) in app.signatures.iter().take(MAX_SAVED_SIGNATURES).enumerate() {
         ui.horizontal(|ui| {
             let (rect, response) = ui.allocate_exact_size(vec2((ui.available_width() - 68.0).max(140.0), 52.0), Sense::click());
-            let use_label = label("Use {what}");
-            response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, use_label.clone()));
+            let active = app.signature.as_ref() == Some(saved);
+            response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("Use signature {}", i + 1)));
             let painter = ui.painter_at(rect);
             painter.rect_filled(rect, CornerRadius::same(4), Color32::WHITE);
-            painter.rect_stroke(
-                rect,
-                CornerRadius::same(4),
-                Stroke::new(1.0, if response.hovered() { t.accent } else { t.border }),
-                egui::StrokeKind::Inside,
-            );
-            paint_saved(ui, rect.shrink(8.0), saved, &mut app.saved_signature_previews[i], &format!("saved-{what}"));
-            if response.on_hover_text(label("Place saved {what}")).clicked() {
-                command = Some(use_id);
+            painter.rect_stroke(rect, CornerRadius::same(4),
+                Stroke::new(if active { 2.0 } else { 1.0 }, if active || response.hovered() { t.accent } else { t.border }),
+                egui::StrokeKind::Inside);
+            paint_saved(ui, rect.shrink(8.0), saved, &mut app.saved_signature_previews[i], &format!("saved-signature-{i}"));
+            if response.on_hover_text(format!("Place signature {}", i + 1)).clicked() {
+                command = Some(USE[i]);
             }
-            if crate::icons::button(ui, "pencil", 26.0, false, &label("Change {what}")).clicked() {
-                command = Some(change_id);
+            if crate::icons::button(ui, "pencil", 26.0, false, &format!("Edit signature {}", i + 1)).clicked() {
+                command = Some(EDIT[i]);
             }
-            if crate::icons::button(ui, "x", 26.0, false, &label("Remove saved {what}")).clicked() {
-                command = Some(remove_id);
+            if crate::icons::button(ui, "x", 26.0, false, &format!("Delete signature {}", i + 1)).clicked() {
+                command = Some(REMOVE[i]);
             }
         });
         ui.add_space(4.0);
+    }
+    if app.signatures.len() < MAX_SAVED_SIGNATURES
+        && crate::widgets::ghost_button(ui, "plus", "Add signature").clicked()
+    {
+        command = Some("sign.fill.signature.add");
+    }
+    ui.separator();
+    if let Some(saved) = app.initials.as_ref() {
+        ui.horizontal(|ui| {
+            let (rect, response) = ui.allocate_exact_size(vec2((ui.available_width() - 68.0).max(140.0), 52.0), Sense::click());
+            response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Use initials"));
+            ui.painter_at(rect).rect_filled(rect, CornerRadius::same(4), Color32::WHITE);
+            paint_saved(ui, rect.shrink(8.0), saved, &mut app.saved_signature_previews[5], "saved-initials");
+            if response.on_hover_text("Place saved initials").clicked() {
+                command = Some("sign.fill.initials");
+            }
+            if crate::icons::button(ui, "pencil", 26.0, false, "Change initials").clicked() {
+                command = Some("sign.fill.initials.change");
+            }
+            if crate::icons::button(ui, "x", 26.0, false, "Remove saved initials").clicked() {
+                command = Some("sign.fill.initials.remove");
+            }
+        });
+    } else if crate::widgets::ghost_button(ui, "plus", "Add initials").clicked() {
+        command = Some("sign.fill.initials");
     }
     command
 }
