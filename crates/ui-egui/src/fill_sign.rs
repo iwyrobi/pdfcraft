@@ -583,7 +583,7 @@ pub(crate) fn signature_entries(ui: &mut egui::Ui, app: &mut crate::PdfCraftApp,
                 command = Some(EDIT[i]);
             }
             if crate::icons::button(ui, "x", 26.0, false, &if i == 0 { "Remove saved signature".to_owned() } else { format!("Delete signature {}", i + 1) }).clicked() {
-                command = Some(REMOVE[i]);
+                command = Some(if legacy && i == 0 { "sign.fill.signature.remove" } else { REMOVE[i] });
             }
         });
         ui.add_space(4.0);
