@@ -599,10 +599,54 @@ impl PdfCraftApp {
                     &[("tool", &crate::i18n::in_sentence(tl!(tool.label())))],
                 );
             }
-            "sign.fill.signature.remove" => self.signature = None,
+            "sign.fill.signature.add" => {
+                if self.signatures.len() < crate::fill_sign::MAX_SAVED_SIGNATURES {
+                    self.signature_edit_index = None;
+                    self.signature_draft = crate::fill_sign::SigDraft::new(false, &self.comment_prefs.author);
+                    self.dialog = Some(Dialog::Signature);
+                }
+            }
+            cmd if cmd.starts_with("sign.fill.signature.select.") => {
+                if let Some(index) = cmd.rsplit('.').next().and_then(|s| s.parse::<usize>().ok()) {
+                    if let Some(saved) = self.signatures.get(index) {
+                        self.signature = Some(saved.clone());
+                        self.quick_tool = crate::QuickTool::Fill(crate::fill_sign::FillTool::Signature);
+                    }
+                }
+            }
+            cmd if cmd.starts_with("sign.fill.signature.edit.") => {
+                if let Some(index) = cmd.rsplit('.').next().and_then(|s| s.parse::<usize>().ok()) {
+                    if let Some(saved) = self.signatures.get(index) {
+                        self.signature_edit_index = Some(index);
+                        self.signature_draft = crate::fill_sign::SigDraft::from_saved(false, saved);
+                        self.dialog = Some(Dialog::Signature);
+                    }
+                }
+            }
+            cmd if cmd.starts_with("sign.fill.signature.delete.") => {
+                if let Some(index) = cmd.rsplit('.').next().and_then(|s| s.parse::<usize>().ok()) {
+                    if index < self.signatures.len() {
+                        let removed = self.signatures.remove(index);
+                        if self.signature.as_ref() == Some(&removed) {
+                            self.signature = self.signatures.first().cloned();
+                        }
+                    }
+                }
+            }
+            "sign.fill.signature.remove" => {
+                if let Some(active) = &self.signature {
+                    if let Some(index) = self.signatures.iter().position(|s| s == active) {
+                        self.signatures.remove(index);
+                    }
+                }
+                self.signature = self.signatures.first().cloned();
+            },
             "sign.fill.initials.remove" => self.initials = None,
             "sign.fill.signature.change" | "sign.fill.initials.change" => {
                 let initials = id == "sign.fill.initials.change";
+                if !initials {
+                    self.signature_edit_index = self.signature.as_ref().and_then(|active| self.signatures.iter().position(|saved| saved == active));
+                }
                 let saved = if initials { self.initials.as_ref() } else { self.signature.as_ref() };
                 self.signature_draft = saved.map_or_else(
                     || crate::fill_sign::SigDraft::new(initials, &self.comment_prefs.author),
