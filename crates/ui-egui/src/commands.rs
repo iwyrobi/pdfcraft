@@ -111,6 +111,54 @@ impl PdfCraftApp {
     }
 
     fn execute_unguarded(&mut self, id: &str) -> bool {
+        // Saved-signature actions are dynamic UI commands, not engine registry entries.
+        // Handle them before the registered-command lookup.
+        if id == "sign.fill.signature.add" {
+            if self.signatures.len() < crate::fill_sign::MAX_SAVED_SIGNATURES {
+                self.signature_edit_index = None;
+                self.signature_draft = crate::fill_sign::SigDraft::new(false, &self.comment_prefs.author);
+                self.dialog = Some(Dialog::Signature);
+            }
+            return true;
+        }
+        for (prefix, action) in [
+            ("sign.fill.signature.select.", 0_u8),
+            ("sign.fill.signature.edit.", 1),
+            ("sign.fill.signature.delete.", 2),
+        ] {
+            if let Some(raw) = id.strip_prefix(prefix) {
+                let Ok(index) = raw.parse::<usize>() else { return false };
+                if index >= crate::fill_sign::MAX_SAVED_SIGNATURES {
+                    return false;
+                }
+                match action {
+                    0 => {
+                        if let Some(saved) = self.signatures.get(index).or_else(|| if index == 0 { self.signature.as_ref() } else { None }) {
+                            self.signature = Some(saved.clone());
+                            self.quick_tool = crate::QuickTool::Fill(crate::fill_sign::FillTool::Signature);
+                        }
+                    }
+                    1 => {
+                        if let Some(saved) = self.signatures.get(index).or_else(|| if index == 0 { self.signature.as_ref() } else { None }) {
+                            self.signature_edit_index = self.signatures.get(index).map(|_| index);
+                            self.signature_draft = crate::fill_sign::SigDraft::from_saved(false, saved);
+                            self.dialog = Some(Dialog::Signature);
+                        }
+                    }
+                    _ => {
+                        if index < self.signatures.len() {
+                            let removed = self.signatures.remove(index);
+                            if self.signature.as_ref() == Some(&removed) {
+                                self.signature = self.signatures.first().cloned();
+                            }
+                        } else if index == 0 && self.signatures.is_empty() {
+                            self.signature = None;
+                        }
+                    }
+                }
+                return true;
+            }
+        }
         let Some(spec) = commands::command(id) else { return false };
         if !self.command_enabled(spec) {
             let why = match spec.needs {
