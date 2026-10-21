@@ -916,7 +916,15 @@ fn dialogs(app: &mut PdfCraftApp, ctx: &egui::Context) {
                         app.initials = d.saved();
                         crate::fill_sign::FillTool::Initials
                     } else {
-                        app.signature = d.saved();
+                        if let Some(saved) = d.saved() {
+                            if let Some(index) = crate::fill_sign::save_signature(
+                                &mut app.signatures, app.signature_edit_index.take(), saved.clone()
+                            ) {
+                                app.signature = app.signatures.get(index).cloned();
+                            } else {
+                                app.notify_tr("Maximum of five saved signatures reached");
+                            }
+                        }
                         crate::fill_sign::FillTool::Signature
                     };
                     app.quick_tool = crate::QuickTool::Fill(tool);

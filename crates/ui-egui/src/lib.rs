@@ -5,6 +5,7 @@
 //! Everything here is presentation: documents, rendering and the tool catalogue live in
 //! `pdfcraft-engine`.
 
+#![recursion_limit = "256"]
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 /// Whether `a` and `b` name the same file: equal, or equal once made absolute against the
@@ -775,13 +776,17 @@ pub struct PdfCraftApp {
     export_status: Option<export_ui::ExportStatus>,
     /// The saved Fill & Sign signature and initials (drawn or typed).
     pub signature: Option<fill_sign::SavedSig>,
+    /// Additional saved visual signatures; the active signature remains in `signature`.
+    pub signatures: Vec<fill_sign::SavedSig>,
+    /// Which saved library entry is being edited, if any.
+    pub signature_edit_index: Option<usize>,
     pub initials: Option<fill_sign::SavedSig>,
     /// The Create signature / initials dialog, and its typed preview.
     pub signature_draft: fill_sign::SigDraft,
     pub(crate) signature_preview: Option<(fill_sign::SavedSig, egui::TextureHandle)>,
     /// The Scan tab's photo, keyed by its version.
     pub(crate) signature_photo: Option<(u64, egui::TextureHandle)>,
-    pub(crate) saved_signature_previews: [Option<(fill_sign::SavedSig, egui::TextureHandle)>; 2],
+    pub(crate) saved_signature_previews: [Option<(fill_sign::SavedSig, egui::TextureHandle)>; 6],
     /// What visible digital signatures show on their left, and its preview in Sign as.
     pub sign_graphic: sign_ui::SignGraphic,
     pub(crate) sign_graphic_preview: Option<(fill_sign::SavedSig, egui::TextureHandle)>,
@@ -1056,11 +1061,13 @@ impl PdfCraftApp {
             export_draft: Default::default(),
             export_status: None,
             signature: None,
+            signatures: Vec::new(),
+            signature_edit_index: None,
             initials: None,
             signature_draft: Default::default(),
             signature_preview: None,
             signature_photo: None,
-            saved_signature_previews: [None, None],
+            saved_signature_previews: std::array::from_fn(|_| None),
             sign_graphic: sign_ui::SignGraphic::Name,
             sign_graphic_preview: None,
             #[cfg(target_arch = "wasm32")]
@@ -2076,6 +2083,16 @@ impl PdfCraftApp {
 
     /// Run a catalogue command. Commands that aren't implemented yet say which milestone ships them.
     pub fn run_command(&mut self, command: &str) {
+        // Saved-signature card actions are dynamic and intentionally absent from
+        // the engine command registry. Dispatch them through execute directly.
+        if command == "sign.fill.signature.add"
+            || command.starts_with("sign.fill.signature.select.")
+            || command.starts_with("sign.fill.signature.edit.")
+            || command.starts_with("sign.fill.signature.delete.")
+        {
+            self.execute(command);
+            return;
+        }
         if let Some(spec) = pdfcraft_engine::commands::command(command) {
             use pdfcraft_engine::commands::Needs;
             // A tool that needs a document, chosen with none open, asks for the file and then
@@ -2291,6 +2308,8 @@ impl PdfCraftApp {
             "signature": match &self.signature { Some(fill_sign::SavedSig::Drawn(s)) => Some(s), _ => None },
             "signature_text": match &self.signature { Some(fill_sign::SavedSig::Typed(t)) => Some(t), _ => None },
             "signature_image": match &self.signature { Some(s @ fill_sign::SavedSig::Image(_)) => Some(s), _ => None },
+            "saved_signatures": &self.signatures,
+            "active_signature": self.signature.as_ref().and_then(|s| self.signatures.iter().position(|saved| saved == s)),
             "initials": self.initials,
             "sign_graphic": self.sign_graphic,
             // macOS Keychain and Windows store identities are read from their OS key stores each time.
@@ -2451,6 +2470,20 @@ impl PdfCraftApp {
         }
         if let Ok(s @ fill_sign::SavedSig::Image(_)) = serde_json::from_value::<fill_sign::SavedSig>(v["signature_image"].clone()) {
             self.signature = Some(s);
+        }
+        if let Ok(mut entries) = serde_json::from_value::<Vec<fill_sign::SavedSig>>(v["saved_signatures"].clone()) {
+            entries.truncate(fill_sign::MAX_SAVED_SIGNATURES);
+            self.signatures = entries;
+        }
+        // Migrate legacy settings containing exactly one visual signature.
+        if self.signatures.is_empty() {
+            if let Some(saved) = self.signature.clone() {
+                self.signatures.push(saved);
+            }
+        }
+        if !self.signatures.is_empty() {
+            let selected = v["active_signature"].as_u64().and_then(|n| usize::try_from(n).ok()).unwrap_or(0);
+            self.signature = self.signatures.get(selected).or_else(|| self.signatures.first()).cloned();
         }
         if let Ok(i) = serde_json::from_value::<fill_sign::SavedSig>(v["initials"].clone()) {
             self.initials = Some(i);
