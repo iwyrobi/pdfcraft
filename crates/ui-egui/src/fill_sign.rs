@@ -558,12 +558,18 @@ pub(crate) fn signature_entries(ui: &mut egui::Ui, app: &mut crate::PdfCraftApp,
     ];
     ui.set_width(ui.available_width().clamp(240.0, 248.0));
     let mut command = None;
-    ui.label(format!("Saved signatures: {} / {}", app.signatures.len(), MAX_SAVED_SIGNATURES));
-    for (i, saved) in app.signatures.iter().take(MAX_SAVED_SIGNATURES).enumerate() {
+    let legacy = app.signatures.is_empty() && app.signature.is_some();
+    let entries: Vec<&SavedSig> = if legacy {
+        app.signature.iter().collect()
+    } else {
+        app.signatures.iter().take(MAX_SAVED_SIGNATURES).collect()
+    };
+    ui.label(format!("Saved signatures: {} / {}", entries.len(), MAX_SAVED_SIGNATURES));
+    for (i, saved) in entries.into_iter().enumerate() {
         ui.horizontal(|ui| {
             let (rect, response) = ui.allocate_exact_size(vec2((ui.available_width() - 68.0).max(140.0), 52.0), Sense::click());
             let active = app.signature.as_ref() == Some(saved);
-            response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("Use signature {}", i + 1)));
+            response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, if i == 0 { "Use signature".to_owned() } else { format!("Use signature {}", i + 1) }));
             let painter = ui.painter_at(rect);
             painter.rect_filled(rect, CornerRadius::same(4), Color32::WHITE);
             painter.rect_stroke(rect, CornerRadius::same(4),
@@ -576,7 +582,7 @@ pub(crate) fn signature_entries(ui: &mut egui::Ui, app: &mut crate::PdfCraftApp,
             if crate::icons::button(ui, "pencil", 26.0, false, &format!("Edit signature {}", i + 1)).clicked() {
                 command = Some(EDIT[i]);
             }
-            if crate::icons::button(ui, "x", 26.0, false, &format!("Delete signature {}", i + 1)).clicked() {
+            if crate::icons::button(ui, "x", 26.0, false, &if i == 0 { "Remove saved signature".to_owned() } else { format!("Delete signature {}", i + 1) }).clicked() {
                 command = Some(REMOVE[i]);
             }
         });
