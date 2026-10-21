@@ -579,7 +579,7 @@ pub(crate) fn signature_entries(ui: &mut egui::Ui, app: &mut crate::PdfCraftApp,
             if response.on_hover_text(format!("Place signature {}", i + 1)).clicked() {
                 command = Some(USE[i]);
             }
-            if crate::icons::button(ui, "pencil", 26.0, false, &format!("Edit signature {}", i + 1)).clicked() {
+            if crate::icons::button(ui, "pencil", 26.0, false, &if i == 0 { "Change signature".to_owned() } else { format!("Edit signature {}", i + 1) }).clicked() {
                 command = Some(EDIT[i]);
             }
             if crate::icons::button(ui, "x", 26.0, false, &if i == 0 { "Remove saved signature".to_owned() } else { format!("Delete signature {}", i + 1) }).clicked() {
